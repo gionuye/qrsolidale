@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>QR Solidale</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="wrap">
+  <div class="donor" id="donor">
+    <div class="donor-card"><p class="muted" style="margin:0">Caricamento…</p></div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script>
+(function(){
+  const Q = window.QRS, el = document.getElementById("donor");
+  let code = Q.normCode(new URLSearchParams(location.search).get("c") || location.hash.replace("#",""));
+  let ben = null, amount = 5, done = null;
+
+  const head = () => `<div class="donor-head">${Q.seal()}<div><div style="font-weight:700">${Q.esc(Q.ASSOC)}</div><div class="small muted">garantisce e segue questa persona</div></div></div>`;
+  const footer = `<p class="verify">Un QR Solidale apre sempre e solo la pagina ufficiale del progetto.<br>Prototipo: i pagamenti sono simulati, nessun denaro reale.</p>`;
+  const entry = (msg) => `<form class="donor-card" id="code-form">
+      <h2>${msg || "Inserisci il codice del cartellino"}</h2>
+      <input type="text" id="code-input" class="mono" placeholder="K7X4-M2QP" maxlength="9" autocomplete="off" autocapitalize="characters" aria-label="Codice del cartellino">
+      <button class="primary" type="submit">Apri</button>
+      <p class="small muted" style="margin:0">Il codice è stampato sotto il QR.</p>
+    </form>`;
+
+  function bindEntry(){
+    const f = document.getElementById("code-form"); if(!f) return;
+    f.onsubmit = e => {
+      e.preventDefault();
+      const c = Q.normCode(document.getElementById("code-input").value);
+      if(c.length !== 8){ Q.toast("Il codice ha 8 caratteri"); return; }
+      code = c; history.replaceState(null, "", "?c="+c); load();
+    };
+  }
+
+  function render(){
+    if(!Q.client){
+      el.innerHTML = head() + `<div class="donor-card"><h2>Pagina non ancora configurata</h2><p class="muted" style="margin:0">Compila il file config.js con i dati del progetto Supabase.</p></div>`;
+      return;
+    }
+    if(!code){ el.innerHTML = head() + entry() + footer; bindEntry(); return; }
+    if(!ben){ el.innerHTML = head() + entry(`Codice ${Q.fmtCode(code)} non trovato`) + footer; bindEntry(); return; }
+    if(ben.stato !== "attivo"){
+      el.innerHTML = head() + `<div class="donor-card inactive"><h2>Codice non attivo</h2><p class="muted" style="margin:0">Il codice <span class="code-chip">${Q.fmtCode(ben.code)}</span> non accetta donazioni. Se pensi sia un errore, contatta l'associazione.</p></div>` + footer;
+      return;
+    }
+    if(done){
+      el.innerHTML = head() + `<div class="donor-card done"><div class="tick" aria-hidden="true">✓</div><h2>Grazie</h2>
+        <p style="margin:0">Hai donato <b>${Q.eur(done)}</b> a ${Q.esc(ben.nome)}.</p>
+        <p class="small muted" style="margin:0">Pagamento simulato. Nella versione reale il denaro arriva direttamente sulla carta di ${Q.esc(ben.nome)}, senza passare dall'associazione.</p>
+        <button type="button" id="again">Fai un'altra donazione</button></div>` + footer;
+      document.getElementById("again").onclick = () => { done = null; render(); };
+      return;
+    }
+    const preset = Q.AMOUNTS.some(a => a.v === amount);
+    el.innerHTML = head() + `<div class="donor-card">
+        <div><div class="small muted">Stai aiutando</div><div class="donor-name">${Q.esc(ben.nome)}</div>
+        <span class="code-chip">${Q.fmtCode(ben.code)}</span> <span class="small muted">controlla che sia uguale al cartellino</span></div>
+        <div class="amounts" role="group" aria-label="Importo">${Q.AMOUNTS.map(a => `<button type="button" data-v="${a.v}" aria-pressed="${amount===a.v}"><b>${a.v} €</b><span>${a.d}</span></button>`).join("")}</div>
+        <label class="field muted" for="free-amount">Oppure un altro importo (€)
+          <input type="number" id="free-amount" min="1" max="500" step="1" inputmode="numeric" placeholder="es. 3" value="${preset ? "" : amount}">
+        </label>
+        <button class="primary donate-btn" type="button" id="donate">Dona ${Q.eur(amount)}</button>
+        <p class="small muted" style="margin:0">Il denaro è di ${Q.esc(ben.nome)}, che lo usa liberamente. Su questa pagina non compare alcun dato personale.</p>
+      </div>` + footer;
+    el.querySelectorAll(".amounts button").forEach(b => b.onclick = () => { amount = +b.dataset.v; render(); });
+    document.getElementById("free-amount").oninput = e => {
+      const v = Math.round(+e.target.value);
+      if(v >= 1 && v <= 500){ amount = v; document.getElementById("donate").textContent = "Dona " + Q.eur(v);
+        el.querySelectorAll(".amounts button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.v === v))); }
+    };
+    document.getElementById("donate").onclick = async ev => {
+      ev.target.disabled = true; ev.target.textContent = "Invio…";
+      const { error } = await Q.client.rpc("dona", { p_code: ben.code, p_importo: amount });
+      if(error){ Q.toast(Q.errMsg(error, "Donazione non registrata: riprova.")); await load(); return; }
+      done = amount; render();
+    };
+  }
+
+  async function load(){
+    if(!Q.client || !code){ render(); return; }
+    const { data, error } = await Q.client.rpc("pagina_pubblica", { p_code: code });
+    if(error){ el.innerHTML = head() + `<div class="donor-card"><h2>Pagina non raggiungibile</h2><p class="muted" style="margin:0">Controlla la connessione e riprova.</p></div>`; return; }
+    ben = (data && data[0]) || null; render();
+  }
+  load();
+})();
+</script>
+</body>
+</html>

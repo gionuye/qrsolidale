@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>QR Solidale – Pannello</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span id="seal-slot"></span>
+      <div>
+        <h1>QR Solidale</h1>
+        <div class="row small muted"><span id="assoc-name"></span><span class="demo-tag">Prototipo · pagamenti simulati</span></div>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Sezioni" id="tabs" hidden>
+      <button role="tab" data-view="pannello" id="tab-pannello">Pannello</button>
+      <button role="tab" data-view="registro" id="tab-registro">Registro</button>
+      <button role="tab" data-view="cartellini" id="tab-cartellini">Cartellini</button>
+      <button type="button" id="logout">Esci</button>
+    </nav>
+  </header>
+
+  <div id="not-configured" class="notice warn" hidden>Il sito non è ancora collegato al database: compila il file <span class="mono">config.js</span> con l'indirizzo e la chiave pubblica del progetto Supabase.</div>
+
+  <!-- ACCESSO -->
+  <section id="view-login" hidden>
+    <form class="panel stack" id="login-form" style="max-width:380px;margin:24px auto">
+      <h2>Accesso operatore</h2>
+      <label class="field" for="email">Email<input type="email" id="email" autocomplete="username" required></label>
+      <label class="field" for="password">Password<input type="password" id="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Entra</button>
+      <p class="small muted" style="margin:0">Gli account operatore si creano dal pannello di Supabase. La pagina per i donatori non richiede accesso.</p>
+    </form>
+  </section>
+
+  <!-- PANNELLO -->
+  <section id="view-pannello" hidden>
+    <div class="grid">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between;margin-bottom:12px"><h2>Beneficiari</h2><span class="small muted" id="who"></span></div>
+        <div class="summary" id="summary"></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Codice</th><th>Nome pubblico</th><th>Stato</th><th style="text-align:right">Donato</th><th>Azioni</th></tr></thead>
+            <tbody id="ben-body"><tr><td colspan="5" class="empty">Caricamento…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="stack">
+        <form class="panel stack" id="new-form">
+          <h2>Nuovo beneficiario</h2>
+          <label class="field" for="new-name">Nome pubblico (scelto dalla persona)<input type="text" id="new-name" maxlength="30" placeholder="es. Amina" required></label>
+          <label class="field" for="new-card">Riferimento carta Poste (simulato)<input type="text" id="new-card" maxlength="20" placeholder="es. ID-0002"></label>
+          <button class="primary" type="submit">Genera codice</button>
+          <p class="small muted" style="margin:0">Il codice è casuale: 8 caratteri dall'alfabeto Crockford Base32, senza I, L, O e U.</p>
+        </form>
+        <div class="panel stack small">
+          <h2>Come provare la demo</h2>
+          <ol style="margin:0;padding-left:1.2em" class="stack">
+            <li>Crea un beneficiario e attivalo.</li>
+            <li>In <b>Cartellini</b> stampa o scarica il cartellino e inquadra il QR con un telefono qualsiasi.</li>
+            <li>Dona un importo simulato: compare qui e nel registro.</li>
+            <li>Sospendi il codice e inquadra di nuovo il QR: risulta non attivo.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REGISTRO -->
+  <section id="view-registro" hidden>
+    <div class="panel stack">
+      <div class="row" style="justify-content:space-between">
+        <h2>Registro delle azioni</h2>
+        <div class="row"><span id="chain-status" class="small"></span><button id="verify-btn" type="button">Verifica catena</button></div>
+      </div>
+      <p class="small muted" style="margin:0">Ogni voce contiene l'impronta SHA-256 della precedente ed è scritta dal database, non dalla pagina: se una voce passata viene alterata, la verifica lo segnala. Le donazioni sono registrate senza l'identità del donatore; le spese dei beneficiari non vengono registrate.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Data e ora</th><th>Azione</th><th>Codice</th><th>Dettaglio</th><th>Autore</th><th>Impronta</th></tr></thead>
+          <tbody id="led-body"><tr><td colspan="6" class="empty">Caricamento…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- CARTELLINI -->
+  <section id="view-cartellini" hidden>
+    <div class="cards">
+      <div class="stack">
+        <div class="panel stack">
+          <h2>Cartellino</h2>
+          <label class="field" for="card-select">Beneficiario<select id="card-select"></select></label>
+          <div class="row">
+            <button class="primary" id="print-card" type="button">Stampa</button>
+            <button id="dl-card" type="button">Scarica SVG</button>
+            <button id="copy-link" type="button">Copia link</button>
+          </div>
+          <a id="card-link" class="small mono" style="word-break:break-all" target="_blank" rel="noopener"></a>
+        </div>
+        <div class="panel small">
+          <dl class="spec">
+            <dt>Formato</dt><dd>16 × 22 cm. La stampa esce a grandezza reale; per il pilota: Forex 3 mm, laminazione opaca.</dd>
+            <dt>QR</dt><dd>13 cm di lato con margine, correzione d'errore H, leggibile a circa 1,3 m.</dd>
+            <dt>Differenza dalla versione reale</dt><dd>Qui il QR punta all'indirizzo di prova del sito. Nella versione reale conterrà <span class="mono">HTTPS://QRSOLIDALE.IT/&lt;codice&gt;</span> e starà nella versione 3 del QR.</dd>
+          </dl>
+        </div>
+      </div>
+      <div class="card-preview" id="card-preview"><div class="empty">Crea e attiva un beneficiario per generare il suo cartellino.</div></div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script>
+(function(){
+  const Q = window.QRS, sb = Q.client, $ = id => document.getElementById(id);
+  const VIEWS = ["login","pannello","registro","cartellini"];
+  const ACTION_LABEL = {creazione:"Creazione",attivazione:"Attivazione",sospensione:"Sospensione",riattivazione:"Riattivazione",sostituzione:"Sostituzione",chiusura:"Chiusura",donazione:"Donazione"};
+  let session = null, view = "pannello", bens = [], events = [], dons = [], selCard = null, confirmClose = null, poll = null;
+
+  $("seal-slot").innerHTML = Q.seal();
+  $("assoc-name").textContent = Q.ASSOC;
+
+  function show(v){
+    view = v;
+    VIEWS.forEach(x => $("view-"+x).hidden = x !== v);
+    document.querySelectorAll("#tabs button[data-view]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === v)));
+    if(v === "pannello") renderPanel();
+    if(v === "registro") renderLedger();
+    if(v === "cartellini") renderCards();
+  }
+  document.querySelectorAll("#tabs button[data-view]").forEach(b => b.onclick = () => show(b.dataset.view));
+
+  /* ---------- accesso ---------- */
+  async function start(){
+    if(!sb){ $("not-configured").hidden = false; return; }
+    const { data } = await sb.auth.getSession();
+    session = data.session;
+    sb.auth.onAuthStateChange((_e, s) => { session = s; route(); });
+    route();
+  }
+  function route(){
+    if(!session){ clearInterval(poll); poll = null; $("tabs").hidden = true; show("login"); return; }
+    $("tabs").hidden = false; $("who").textContent = session.user.email || "";
+    if(view === "login") show("pannello"); else show(view);
+    load(); if(!poll) poll = setInterval(load, 5000);
+  }
+  $("login-form").onsubmit = async e => {
+    e.preventDefault();
+    const btn = e.submitter; btn.disabled = true;
+    const { error } = await sb.auth.signInWithPassword({ email: $("email").value.trim(), password: $("password").value });
+    btn.disabled = false;
+    if(error) Q.toast(Q.errMsg(error, "Accesso non riuscito."));
+  };
+  $("logout").onclick = () => sb.auth.signOut();
+
+  /* ---------- dati ---------- */
+  async function load(){
+    const [b, d, ev] = await Promise.all([
+      sb.from("beneficiari").select("*").order("creato", { ascending: false }),
+      sb.from("donazioni").select("code,importo,ts"),
+      sb.from("eventi").select("*").order("id", { ascending: false }).limit(500)
+    ]);
+    if(b.error || d.error || ev.error) return;
+    bens = b.data; dons = d.data; events = ev.data;
+    if(view === "pannello") renderPanel();
+    if(view === "registro") renderLedger();
+    if(view === "cartellini" && !$("card-select").matches(":focus")) renderCards();
+  }
+  async function call(fn, args, okMsg){
+    const { data, error } = await sb.rpc(fn, args);
+    if(error){ Q.toast(Q.errMsg(error)); return null; }
+    if(okMsg) Q.toast(typeof okMsg === "function" ? okMsg(data) : okMsg);
+    await load(); return data ?? true;
+  }
+
+  /* ---------- pannello ---------- */
+  function totals(){ const t = {}; for(const d of dons) t[d.code] = (t[d.code]||0) + (+d.importo||0); return t; }
+  function renderPanel(){
+    const t = totals(), n = s => bens.filter(b => b.stato === s).length;
+    const tot = dons.reduce((a, d) => a + (+d.importo||0), 0);
+    $("summary").innerHTML = `<div><b>${n("attivo")}</b><span>Attivi</span></div><div><b>${n("sospeso")}</b><span>Sospesi</span></div><div><b>${dons.length}</b><span>Donazioni</span></div><div><b>${Q.eur(tot)}</b><span>Totale simulato</span></div>`;
+    const body = $("ben-body");
+    if(!bens.length){ body.innerHTML = `<tr><td colspan="5" class="empty">Nessun beneficiario. Inserisci un nome pubblico nel modulo per generare il primo codice.</td></tr>`; return; }
+    const order = {attivo:0, da_attivare:1, sospeso:2, sostituito:3, chiuso:4};
+    const rows = [...bens].sort((a, b) => (order[a.stato] - order[b.stato]) || (new Date(b.creato) - new Date(a.creato)));
+    body.innerHTML = rows.map(b => {
+      let a = "";
+      if(b.stato === "da_attivare") a += `<button class="primary" data-act="attiva" data-code="${b.code}">Attiva</button>`;
+      if(b.stato === "attivo") a += `<button data-act="sospendi" data-code="${b.code}">Sospendi</button><button data-act="sostituisci" data-code="${b.code}">Sostituisci</button><button data-act="cartellino" data-code="${b.code}">Cartellino</button>`;
+      if(b.stato === "sospeso") a += `<button data-act="riattiva" data-code="${b.code}">Riattiva</button><button data-act="sostituisci" data-code="${b.code}">Sostituisci</button>`;
+      if(["attivo","sospeso","da_attivare"].includes(b.stato)) a += confirmClose === b.code
+        ? `<button class="danger" data-act="chiudi-ok" data-code="${b.code}">Conferma chiusura</button><button data-act="chiudi-no" data-code="${b.code}">Annulla</button>`
+        : `<button class="danger" data-act="chiudi" data-code="${b.code}">Chiudi</button>`;
+      const note = b.sostituito_da ? `<div class="small muted">→ ${Q.fmtCode(b.sostituito_da)}</div>` : (b.sostituisce ? `<div class="small muted">sostituisce ${Q.fmtCode(b.sostituisce)}</div>` : "");
+      return `<tr><td class="mono">${Q.fmtCode(b.code)}${note}</td><td>${Q.esc(b.nome)}</td><td><span class="pill st-${b.stato}">${Q.STATE_LABEL[b.stato] || b.stato}</span></td><td class="num">${Q.eur(t[b.code])}</td><td><div class="actions">${a}</div></td></tr>`;
+    }).join("");
+  }
+  $("ben-body").addEventListener("click", async e => {
+    const btn = e.target.closest("button[data-act]"); if(!btn) return;
+    const code = btn.dataset.code, act = btn.dataset.act, f = Q.fmtCode(code);
+    if(act === "chiudi"){ confirmClose = code; renderPanel(); return; }
+    if(act === "chiudi-no"){ confirmClose = null; renderPanel(); return; }
+    if(act === "cartellino"){ selCard = code; show("cartellini"); return; }
+    btn.disabled = true;
+    if(act === "attiva")   await call("cambia_stato", { p_code: code, p_azione: "attiva" },   f + " attivato");
+    if(act === "sospendi") await call("cambia_stato", { p_code: code, p_azione: "sospendi" }, f + " sospeso");
+    if(act === "riattiva") await call("cambia_stato", { p_code: code, p_azione: "riattiva" }, f + " riattivato");
+    if(act === "chiudi-ok"){ confirmClose = null; await call("cambia_stato", { p_code: code, p_azione: "chiudi" }, f + " chiuso"); }
+    if(act === "sostituisci"){ const nc = await call("sostituisci", { p_code: code }, c => "Nuovo codice " + Q.fmtCode(c) + " attivo"); if(nc) selCard = nc; }
+    btn.disabled = false;
+  });
+  $("new-form").onsubmit = async e => {
+    e.preventDefault();
+    const btn = e.submitter; btn.disabled = true;
+    const c = await call("crea_beneficiario", { p_nome: $("new-name").value.trim(), p_carta: $("new-card").value.trim() }, c => "Codice " + Q.fmtCode(c) + " creato: ora attivalo");
+    if(c){ selCard = c; $("new-name").value = ""; $("new-card").value = ""; }
+    btn.disabled = false;
+  };
+
+  /* ---------- registro ---------- */
+  const fmtTs = iso => new Date(iso).toLocaleString("it-IT", { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit" });
+  function renderLedger(){
+    const body = $("led-body");
+    if(!events.length){ body.innerHTML = `<tr><td colspan="6" class="empty">Nessuna azione registrata.</td></tr>`; return; }
+    body.innerHTML = events.map(e => {
+      const who = e.autore === "donatore" ? "Donatore (anonimo)" : e.autore;
+      return `<tr><td class="mono small">${fmtTs(e.ts_iso)}</td><td>${ACTION_LABEL[e.azione] || Q.esc(e.azione)}</td><td class="mono">${Q.fmtCode(e.codice)}</td><td>${Q.esc(e.dettaglio)}</td><td>${Q.esc(who)}</td><td class="hash" title="${Q.esc(e.hash)}">${Q.esc(e.hash.slice(0,10))}…</td></tr>`;
+    }).join("");
+  }
+  $("verify-btn").onclick = async () => {
+    const st = $("chain-status");
+    const { data, error } = await sb.from("eventi").select("*").order("id", { ascending: true });
+    if(error){ st.textContent = "Registro non leggibile"; st.className = "small chain-bad"; return; }
+    let prev = "0".repeat(64), bad = null;
+    for(const e of data){
+      const h = await Q.sha256([e.prev_hash, e.ts_iso, e.azione, e.codice, e.dettaglio, e.autore].join("|"));
+      if(h !== e.hash || e.prev_hash !== prev){ bad = e; break; }
+      prev = e.hash;
+    }
+    st.textContent = bad ? `Catena interrotta alla voce del ${fmtTs(bad.ts_iso)}` : `Catena integra: ${data.length} voci verificate`;
+    st.className = "small " + (bad ? "chain-bad" : "chain-ok");
+  };
+
+  /* ---------- cartellini ---------- */
+  function qrGroup(text, x, y, size){
+    const q = qrcode(0, "H"); q.addData(text); q.make();
+    const n = q.getModuleCount(), quiet = 4, m = size / (n + quiet*2);
+    let d = "";
+    for(let r = 0; r < n; r++) for(let c = 0; c < n; c++) if(q.isDark(r, c))
+      d += `M${(x+(c+quiet)*m).toFixed(3)} ${(y+(r+quiet)*m).toFixed(3)}h${m.toFixed(3)}v${m.toFixed(3)}h-${m.toFixed(3)}z`;
+    return `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="#ffffff"/><path d="${d}" fill="#111111"/>`;
+  }
+  function cardSvg(b){
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="160mm" height="220mm" viewBox="0 0 160 220">
+<rect width="160" height="220" fill="#ffffff"/>
+<circle cx="40" cy="8" r="2" fill="none" stroke="#9aa5a8" stroke-width=".4"/><circle cx="120" cy="8" r="2" fill="none" stroke="#9aa5a8" stroke-width=".4"/>
+<circle cx="80" cy="20" r="11" fill="#0d5c63"/><path d="M80 26s-5-3-5-6.4a2.9 2.9 0 0 1 5-1.8a2.9 2.9 0 0 1 5 1.8C85 23 80 26 80 26z" fill="#ffffff"/>
+<text x="80" y="36" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="4.2" fill="#14262a">${Q.esc(Q.ASSOC)} · QR Solidale</text>
+${qrGroup(Q.donorUrl(b.code), 15, 38, 130)}
+<text x="80" y="186" text-anchor="middle" font-family="Courier New, monospace" font-weight="700" font-size="15" letter-spacing="1.5" fill="#14262a">${Q.fmtCode(b.code)}</text>
+<text x="80" y="200" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="5.5" fill="#14262a">Inquadra per donare</text>
+<text x="80" y="210" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="3.6" fill="#7a868a">Prototipo dimostrativo: pagamenti simulati</text>
+</svg>`;
+  }
+  function renderCards(){
+    const sel = $("card-select");
+    const usable = bens.filter(b => ["attivo","da_attivare","sospeso"].includes(b.stato));
+    const btns = ["print-card","dl-card","copy-link"];
+    if(!usable.length){ sel.innerHTML = ""; $("card-preview").innerHTML = `<div class="empty">Crea e attiva un beneficiario per generare il suo cartellino.</div>`; $("card-link").textContent = ""; btns.forEach(i => $(i).disabled = true); return; }
+    if(!selCard || !usable.find(b => b.code === selCard)) selCard = usable[0].code;
+    sel.innerHTML = usable.map(b => `<option value="${b.code}" ${b.code === selCard ? "selected" : ""}>${Q.fmtCode(b.code)} · ${Q.esc(b.nome)} (${Q.STATE_LABEL[b.stato]})</option>`).join("");
+    const b = usable.find(x => x.code === selCard);
+    btns.forEach(i => $(i).disabled = false);
+    $("card-preview").innerHTML = cardSvg(b);
+    const url = Q.donorUrl(b.code); $("card-link").textContent = url; $("card-link").href = url;
+  }
+  $("card-select").onchange = e => { selCard = e.target.value; renderCards(); };
+  $("print-card").onclick = () => window.print();
+  $("dl-card").onclick = () => {
+    const b = bens.find(x => x.code === selCard); if(!b) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([cardSvg(b)], { type: "image/svg+xml" }));
+    a.download = `cartellino-${b.code}.svg`; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  $("copy-link").onclick = async () => {
+    try{ await navigator.clipboard.writeText(Q.donorUrl(selCard)); Q.toast("Link copiato"); }
+    catch(e){ Q.toast("Copia non riuscita: seleziona il link a mano"); }
+  };
+
+  start();
+})();
+</script>
+</body>
+</html>
